@@ -76,7 +76,7 @@ async def list_tools(
                         {
                             "name": t.name,
                             "description": t.description,
-                            "inputSchema": t.inputSchema
+                            "inputSchema": t.input_Schema
                         }
                         for t in result.tools
                     ]
