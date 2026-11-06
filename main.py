@@ -1,7 +1,6 @@
 import os
 import shutil
 import logging
-import traceback
 import asyncio
 from typing import Any
 
@@ -19,7 +18,7 @@ logger = logging.getLogger(“salmark”)
 
 app = FastAPI(
 title=“Salmark Neshan Bridge”,
-version=“1.2.0”
+version=“1.2.1”
 )
 
 TOKEN = os.environ.get(“SALMARK_TOKEN”, “”).strip()
@@ -27,11 +26,11 @@ TOKEN = os.environ.get(“SALMARK_TOKEN”, “”).strip()
 def check_auth(authorization: str | None):
 if not TOKEN:
 logger.error(“SALMARK_TOKEN is not configured”)
+raise HTTPException(
+status_code=503,
+detail=“SALMARK_TOKEN is not configured”
+)
 
-    raise HTTPException(
-        status_code=503,
-        detail="SALMARK_TOKEN is not configured"
-    )
 if authorization != f"Bearer {TOKEN}":
     logger.warning("Unauthorized request")
     raise HTTPException(
@@ -40,18 +39,12 @@ if authorization != f"Bearer {TOKEN}":
     )
 
 def server_params():
+logger.info(“Checking Neshan executable”)
 
-logger.info("Checking Neshan executable")
 executable = shutil.which("neshan-mcp")
 if not executable:
-    logger.error("neshan-mcp executable was not found")
-    raise RuntimeError(
-        "neshan-mcp executable was not found"
-    )
-logger.info(
-    "Neshan executable found: %s",
-    executable
-)
+    raise RuntimeError("neshan-mcp executable was not found")
+logger.info("Neshan executable found: %s", executable)
 return StdioServerParameters(
     command=executable,
     args=[],
@@ -63,24 +56,23 @@ async def root():
 return {
 “ok”: True,
 “service”: “salmark-neshan-bridge”,
-“version”: “1.2.0”
+“version”: “1.2.1”
 }
 
 @app.get(”/health”)
 async def health():
-
 return {
-    "ok": True,
-    "service": "salmark-neshan-bridge",
-    "version": "1.2.0"
+“ok”: True,
+“service”: “salmark-neshan-bridge”,
+“version”: “1.2.1”
 }
 
 @app.get(”/tools”)
 async def list_tools(
 authorization: str | None = Header(default=None)
 ):
-
 check_auth(authorization)
+
 logger.info("TOOLS REQUEST RECEIVED")
 try:
     async with stdio_client(server_params()) as (
@@ -109,41 +101,39 @@ try:
             return {
                 "tools": [
                     {
-                        "name": t.name,
-                        "description": t.description,
-                        "inputSchema": t.input_schema
+                        "name": tool.name,
+                        "description": tool.description,
+                        "inputSchema": tool.input_schema
                     }
-                    for t in result.tools
+                    for tool in result.tools
                 ]
             }
+except HTTPException:
+    raise
 except Exception as error:
-    logger.exception(
-        "NESHAN MCP TOOLS ERROR: %s",
-        str(error)
-    )
+    logger.exception("NESHAN MCP TOOLS ERROR")
     raise HTTPException(
         status_code=502,
-        detail=f"MCP tools error: {type(error).__name__}: {str(error)[:300]}"
+        detail=(
+            f"MCP tools error: "
+            f"{type(error).__name__}: {str(error)[:300]}"
+        )
     )
 
 class ToolCall(BaseModel):
-
 tool: str = Field(min_length=1)
-arguments: dict[str, Any] = Field(
-    default_factory=dict
-)
+arguments: dict[str, Any] = Field(default_factory=dict)
 
 @app.post(”/call”)
 async def call_tool(
 payload: ToolCall,
 authorization: str | None = Header(default=None)
 ):
-
 check_auth(authorization)
+
 logger.info(
-    "CALL REQUEST RECEIVED | tool=%s | arguments=%s",
-    payload.tool,
-    payload.arguments
+    "CALL REQUEST RECEIVED | tool=%s",
+    payload.tool
 )
 try:
     async with stdio_client(server_params()) as (
@@ -200,20 +190,20 @@ try:
                     None
                 )
             }
+except HTTPException:
+    raise
 except asyncio.TimeoutError:
-    logger.exception(
-        "NESHAN REQUEST TIMED OUT"
-    )
+    logger.exception("NESHAN REQUEST TIMED OUT")
     raise HTTPException(
         status_code=504,
         detail="Neshan request timed out"
     )
 except Exception as error:
-    logger.exception(
-        "NESHAN MCP CALL ERROR: %s",
-        str(error)
-    )
+    logger.exception("NESHAN MCP CALL ERROR")
     raise HTTPException(
         status_code=502,
-        detail=f"Neshan MCP call failed: {type(error).__name__}: {str(error)[:300]}"
+        detail=(
+            f"Neshan MCP call failed: "
+            f"{type(error).__name__}: {str(error)[:300]}"
+        )
     )
