@@ -9,10 +9,7 @@ from pydantic import BaseModel, Field
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-logging.basicConfig(
-level=logging.INFO,
-format=”%(asctime)s %(levelname)s %(name)s: %(message)s”
-)
+logging.basicConfig(level=logging.INFO)
 
 logger = logging.getLogger(“salmark”)
 
